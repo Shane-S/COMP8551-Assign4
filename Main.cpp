@@ -1,5 +1,7 @@
 #include <windows.h>
+#include "ControlDlgProc.h"
 #include "resource.h"
+#include "Utils.h"
 
 LRESULT CALLBACK NameWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK SetWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -26,27 +28,12 @@ void initClass(WNDCLASS* wndClass, WNDPROC lpfnWndProc, HINSTANCE hInstance, TCH
 	wndClass->lpszClassName = szAppName;
 }
 
-INT_PTR CALLBACK DialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	switch (uMsg)
-	{
-	case WM_CLOSE: /* there are more things to go here, */
-		DestroyWindow(hDlg);
-
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return TRUE;
-
-	default:
-		return FALSE;
-	}
-}
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	PSTR szCmdLine, int iCmdShow)
 {
+	// We're using a dialog as the main window for convenience in creating the UI
 	HWND hDlg;
-	hDlg = CreateDialogParam(hInstance, MAKEINTRESOURCE(IDD_DIALOG1), 0, DialogProc, 0);
+	hDlg = CreateDialogParam(hInstance, MAKEINTRESOURCE(IDD_DIALOG1), 0, ControlDlgProc, 0);
 	ShowWindow(hDlg, iCmdShow);
 
 	BOOL ret;
