@@ -47,6 +47,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			DispatchMessage(&msg); /* send it to dialog procedure */
 		}
 	}
+	return msg.wParam;
 	//static TCHAR szNameClassAppName[] = TEXT("Name");
 	//static TCHAR szSetClassAppName[] = TEXT("Set");
 	//HWND         hwnd;

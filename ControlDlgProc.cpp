@@ -2,7 +2,7 @@
 #include "Utils.h"
 #include <tchar.h>
 
-#define FILENAME_SIZE 8192
+#define FILENAME_SIZE MAX_PATH
 
 // Acceptable image file formats
 static const LPTSTR szFilter = TEXT("Image files (*.BMP; *.GIF; *.ICO; *.JPEG; *.JPG; *.PNG;*.TIFF)\0*.BMP;*.GIF;*.ICO;*.JPEG;*.JPG;*.PNG;*.TIFF\0\0");
@@ -50,8 +50,8 @@ BOOL OpenFileDlg(HWND hwndOwner, const LPTSTR filters, TCHAR *szFileName, DWORD 
 ///<param name="hwndOpener">The HWND of the window that opened/owns the dialog box.</param>
 ///<param name="hwndText">The HWND of the textbox control that will display the name.</param>
 VOID ChooseFile(HWND hwndOpener, HWND hwndText) {
-	TCHAR szFileName[FILENAME_SIZE] = { 0 };
 	DWORD dwError = 0;
+	TCHAR szFileName[FILENAME_SIZE] = { 0 };
 	if (!OpenFileDlg(hwndOpener, szFilter, szFileName, FILENAME_SIZE) && (dwError == CommDlgExtendedError()) != 0) {
 		_ftprintf(stderr, TEXT("Error: %s\n"), CommDlgExtendedErrorToString(dwError));
 	} else {
@@ -59,14 +59,111 @@ VOID ChooseFile(HWND hwndOpener, HWND hwndText) {
 	}
 }
 
+///<summary>Checks whether the given file is a valid image file.</summary>
+///<param name="szFile">The path to the file to check.</param>
+///<returns>Whether the file is valid.</summary>
+BOOL IsValidImageFile(LPTSTR szFile) {
+	TCHAR szFileExt[8] = { 0 };   // The file extension of the actual file
+	DWORD dwExtSize;              // Size of the file extension
+	TCHAR szFilterExt[8] = { 0 }; // The current filter extension being compared
+	BOOL  bIsValidExt = FALSE;
+
+	TCHAR* curChar;
+	TCHAR period = TEXT('.');
+	TCHAR* lastPeriod = NULL;
+	for (curChar = szFile; *curChar != 0; curChar++) {
+		if (*curChar == period) lastPeriod = curChar;
+	}
+
+	// No file extension? Definitely not valid then
+	if (lastPeriod == NULL) return FALSE;
+
+	// No picture format I've ever heard of...
+	dwExtSize = (DWORD)(curChar - lastPeriod - 1);
+	if (!dwExtSize || dwExtSize > 7) {
+		return FALSE;
+	}
+
+	_tcsnccpy_s(szFileExt, lastPeriod + 1, dwExtSize + 1); // + 1 will copy the null terminator too
+	for (curChar = szFileExt; *curChar != 0; curChar++) {
+		*curChar = _totupper(*curChar);
+	}
+	
+	// Yep, I'm re-using variables
+	for (curChar = szFilter; *curChar != 0; curChar++);
+	curChar += 3; // Skip to first character of the first extention
+	lastPeriod = curChar - 1;
+
+	// Compare each valid file extension against the one for our image
+	for (; *curChar != 0; curChar++) {
+		if (*curChar == TEXT(';')) {
+			dwExtSize = (DWORD)(curChar - lastPeriod - 1);
+			_tcsnccpy_s(szFilterExt, lastPeriod + 1, dwExtSize);
+			szFilterExt[dwExtSize + 1] = 0;
+			if (_tccmp(szFileExt, szFilterExt) == 0) {
+				bIsValidExt = TRUE;
+				break;
+			}
+
+			curChar += 3; // Skip the "*." after the semicolon in the list
+			lastPeriod = curChar - 1;
+		}
+	}
+
+	// Final comparison if there's no trailing semicolon
+	if (*(curChar - 1) != TEXT(';') && !bIsValidExt) {
+		dwExtSize = (DWORD)(curChar - lastPeriod - 1);
+		_tcsnccpy_s(szFilterExt, lastPeriod + 1, dwExtSize);
+		szFilterExt[dwExtSize + 1] = 0;
+		if (_tccmp(szFileExt, szFilterExt) == 0) {
+			bIsValidExt = TRUE;
+		}
+	}
+
+	if (!bIsValidExt) return FALSE;
+
+	// Finally, check if the file actually exists
+	DWORD dwAttrib = GetFileAttributes(szFile);
+	return dwAttrib != INVALID_FILE_ATTRIBUTES;
+}
+
+///<summary>Allocates a BLENDSETTINGS struct.</summary>
+///<returns>The allocated struct.</returns>
+LPBLENDSETTINGS AllocBlendSettings() {
+	LPBLENDSETTINGS blendSettings = (LPBLENDSETTINGS)malloc(sizeof(BLENDSETTINGS));
+	blendSettings->szImageFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+	blendSettings->szKernelFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+	return blendSettings;
+}
+
+///<summary>Frees a BLENDSETTINGS struct.</summary>
+VOID FreeBlendSettings(LPBLENDSETTINGS blendSettings) {
+	free(blendSettings->szImageFile);
+	free(blendSettings->szImageFile);
+	free(blendSettings);
+}
+
 INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// Acceptable file formats for the images
+	// This will be garbage in WM_INITDIALOG, but we're not using it there anyway, so who cares
+	LPBLENDSETTINGS settings = (LPBLENDSETTINGS)GetWindowLongPtr(hDlg, GWLP_USERDATA);
+
 	switch (uMsg)
 	{
+	case WM_INITDIALOG: {
+		// Check the serial radio button by default
+		HWND hwndSerialRadioBtn = GetDlgItem(hDlg, IDC_RADIO_SERIAL);
+		SendMessage(hwndSerialRadioBtn, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
+		
+		// Create a BLENDSETTINGS struct to store our settings
+		LPBLENDSETTINGS blendSettings = AllocBlendSettings();
+		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)blendSettings);
+
+		return TRUE;
+	}
 	case WM_CLOSE: /* there are more things to go here, */
 		DestroyWindow(hDlg);
-
+		
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return TRUE;
@@ -77,9 +174,40 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		case IDC_IMG_BROWSE:
 			ChooseFile(hDlg, GetDlgItem(hDlg, IDC_IMAGE_EDIT));
 			return TRUE;
+
 		case IDC_KERNEL_BROWSE:
 			ChooseFile(hDlg, GetDlgItem(hDlg, IDC_KERNEL_EDIT));
 			return TRUE;
+
+		case IDSTART: {
+			TCHAR szBlendFactor[64] = { 0 };
+			BYTE blendType;
+			BOOL bIsSerial = SendMessage(GetDlgItem(hDlg, IDC_RADIO_SERIAL), BM_GETCHECK, 0, 0) == BST_CHECKED;
+			BOOL bIsMMX = SendMessage(GetDlgItem(hDlg, IDC_RADIO_MMX), BM_GETCHECK, 0, 0) == BST_CHECKED;
+			
+			// Try to get the blend factor
+			GetWindowText(GetDlgItem(hDlg, IDC_BLEND), szBlendFactor, 64);
+			if (_stscanf_s(szBlendFactor, TEXT("%lf"), &settings->blendFactor) != 1 || settings->blendFactor < 0 || settings->blendFactor > 1) {
+				MessageBox(hDlg, TEXT("Blend factor must be between 0 and 1."), TEXT("Invalid Blend Factor"), MB_ICONERROR);
+				return TRUE;
+			}
+
+			// Set the blend procedure
+			if (bIsSerial)   settings->blendType = BLEND_SERIAL;
+			else if (bIsMMX) settings->blendType = BLEND_MMX;
+			else             settings->blendType = BLEND_SSE;
+
+			// Get the file names and check to make sure they're valid
+			GetWindowText(GetDlgItem(hDlg, IDC_IMAGE_EDIT), settings->szImageFile, FILENAME_SIZE);
+			GetWindowText(GetDlgItem(hDlg, IDC_KERNEL_EDIT), settings->szKernelFile, FILENAME_SIZE);
+
+			if (!IsValidImageFile(settings->szImageFile)) {
+				MessageBox(hDlg, TEXT("Invalid image file. Please select a file with one of the specified extensions."), TEXT("Invalid Image File"), MB_ICONERROR);
+			} else if (!IsValidImageFile(settings->szKernelFile)) {
+				MessageBox(hDlg, TEXT("Invalid kernel image file. Please select a file with one of the specified extensions."), TEXT("Invalid Kernel Image File"), MB_ICONERROR);
+			}
+			return TRUE;
+		}
 		}
 	default:
 		return FALSE;
