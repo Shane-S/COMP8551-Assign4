@@ -1,6 +1,6 @@
-#include <windows.h>
+#include <Windows.h>
 
-LRESULT CALLBACK SetWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK ImageWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	HDC             hdc;
 	PAINTSTRUCT     ps;
@@ -9,20 +9,20 @@ LRESULT CALLBACK SetWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 	switch (message)
 	{
 	case WM_CREATE:
-		//PlaySound(TEXT("hellowin.wav"), NULL, SND_FILENAME | SND_ASYNC);
+		// Cast CREATESTRUCT to bitmap
+		// Save bitmap as class long ptr
 		return 0;
 
 	case WM_PAINT:
 		hdc = BeginPaint(hwnd, &ps);
 		GetClientRect(hwnd, &rect);
 
-		DrawText(hdc, TEXT("Set 3O"), -1, &rect,
-			DT_SINGLELINE | DT_CENTER | DT_VCENTER);
-
 		EndPaint(hwnd, &ps);
 		return 0;
 
 	case WM_DESTROY:
+		// Send destroy message to other windows or notify them somehow (SetClassLongPtr, maybe?)
+		// and also notify the dialog box
 		PostQuitMessage(0);
 		return 0;
 	}

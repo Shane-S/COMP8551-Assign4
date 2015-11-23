@@ -1,6 +1,8 @@
+#include <wincodec.h>
+#include <tchar.h>
 #include "ControlDlgProc.h"
 #include "Utils.h"
-#include <tchar.h>
+#include "ImageBlender.h"
 
 #define FILENAME_SIZE MAX_PATH
 
@@ -84,12 +86,14 @@ BOOL IsValidImageFile(LPTSTR szFile) {
 		return FALSE;
 	}
 
+	// Save the extension and convert it to uppercase for comparison with our filter
 	_tcsnccpy_s(szFileExt, lastPeriod + 1, dwExtSize + 1); // + 1 will copy the null terminator too
 	for (curChar = szFileExt; *curChar != 0; curChar++) {
 		*curChar = _totupper(*curChar);
 	}
 	
 	// Yep, I'm re-using variables
+	// Skip the description part of our filter to get to the actual extensions
 	for (curChar = szFilter; *curChar != 0; curChar++);
 	curChar += 3; // Skip to first character of the first extention
 	lastPeriod = curChar - 1;
@@ -100,6 +104,7 @@ BOOL IsValidImageFile(LPTSTR szFile) {
 			dwExtSize = (DWORD)(curChar - lastPeriod - 1);
 			_tcsnccpy_s(szFilterExt, lastPeriod + 1, dwExtSize);
 			szFilterExt[dwExtSize + 1] = 0;
+			
 			if (_tccmp(szFileExt, szFilterExt) == 0) {
 				bIsValidExt = TRUE;
 				break;
@@ -127,26 +132,11 @@ BOOL IsValidImageFile(LPTSTR szFile) {
 	return dwAttrib != INVALID_FILE_ATTRIBUTES;
 }
 
-///<summary>Allocates a BLENDSETTINGS struct.</summary>
-///<returns>The allocated struct.</returns>
-LPBLENDSETTINGS AllocBlendSettings() {
-	LPBLENDSETTINGS blendSettings = (LPBLENDSETTINGS)malloc(sizeof(BLENDSETTINGS));
-	blendSettings->szImageFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
-	blendSettings->szKernelFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
-	return blendSettings;
-}
-
-///<summary>Frees a BLENDSETTINGS struct.</summary>
-VOID FreeBlendSettings(LPBLENDSETTINGS blendSettings) {
-	free(blendSettings->szImageFile);
-	free(blendSettings->szImageFile);
-	free(blendSettings);
-}
-
 INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	// This will be garbage in WM_INITDIALOG, but we're not using it there anyway, so who cares
+	// These will be garbage in WM_INITDIALOG, but we're not using them there anyway, so who cares
 	LPBLENDSETTINGS settings = (LPBLENDSETTINGS)GetWindowLongPtr(hDlg, GWLP_USERDATA);
+	LPBLENDRESULT results = (LPBLENDRESULT)(settings + 1);
 
 	switch (uMsg)
 	{
@@ -155,12 +145,44 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		HWND hwndSerialRadioBtn = GetDlgItem(hDlg, IDC_RADIO_SERIAL);
 		SendMessage(hwndSerialRadioBtn, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
 		
-		// Create a BLENDSETTINGS struct to store our settings
-		LPBLENDSETTINGS blendSettings = AllocBlendSettings();
-		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)blendSettings);
+		// Create BLENDSETTINGS and BLENDRESULT structs for our processing
+		LPVOID blendStructs = (LPVOID)malloc(sizeof(BLENDSETTINGS) + sizeof(BLENDRESULT));
+
+		// Allocate space for the file names
+		LPBLENDSETTINGS blendSettings = (LPBLENDSETTINGS)blendStructs;
+		blendSettings->szImageFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+		blendSettings->szKernelFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+
+		LPBLENDRESULT blendResult = (LPBLENDRESULT)(blendSettings + 1);
+		blendResult->hwndNotifyWindow = hDlg;
+
+		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)blendStructs);
 
 		return TRUE;
 	}
+	case WM_BLENDFINISHED: {
+		DWORD dwError = wParam;
+		switch (dwError) {
+		case BLEND_GENERAL_FAILURE:
+			MessageBox(NULL, TEXT("The images could not be blended for some reason. Please try again later."), TEXT("General Failure"), MB_ICONERROR);
+			return TRUE;
+		case BLEND_KERNEL_2LARGE:
+			MessageBox(NULL, TEXT("The kernel image was too large. Its maximum dimensions are those of the image to blend. Please select another kernel."),
+				TEXT("Kernel Too Large"), MB_ICONERROR);
+			return TRUE;
+		}
+
+		// Set the amount of time taken
+		HWND hwndTimeMessage = GetDlgItem(hDlg, IDC_PROC_TIME_TXT);
+		TCHAR buf[128] = { 0 };
+		_sntprintf_s(buf, _countof(buf), TEXT("Processing Time (ms): %.3f"), results->processTime);
+		SetWindowText(hwndTimeMessage, buf);
+
+		// Re-enable the start button
+		EnableWindow(GetDlgItem(hDlg, IDSTART), TRUE);
+		return TRUE;
+	}
+
 	case WM_CLOSE: /* there are more things to go here, */
 		DestroyWindow(hDlg);
 		
@@ -202,10 +224,30 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			GetWindowText(GetDlgItem(hDlg, IDC_KERNEL_EDIT), settings->szKernelFile, FILENAME_SIZE);
 
 			if (!IsValidImageFile(settings->szImageFile)) {
-				MessageBox(hDlg, TEXT("Invalid image file. Please select a file with one of the specified extensions."), TEXT("Invalid Image File"), MB_ICONERROR);
+				MessageBox(hDlg, TEXT("Invalid image file. Please select an existing file file with one of the specified extensions."), TEXT("Invalid Image File"), MB_ICONERROR);
 			} else if (!IsValidImageFile(settings->szKernelFile)) {
-				MessageBox(hDlg, TEXT("Invalid kernel image file. Please select a file with one of the specified extensions."), TEXT("Invalid Kernel Image File"), MB_ICONERROR);
+				MessageBox(hDlg, TEXT("Invalid kernel image file. Please select an existing file with one of the specified extensions."), TEXT("Invalid Kernel Image File"), MB_ICONERROR);
 			}
+
+			HWND startBtnHwnd = (HWND)lParam;
+			EnableWindow(GetDlgItem(hDlg, IDSTART), FALSE);
+
+			BlendImages(settings, results);
+
+			// Initialize COM
+			//CoInitialize(NULL);
+
+			//// The factory pointer
+			//IWICImagingFactory *pFactory = NULL;
+
+			//// Create the COM imaging factory
+			//HRESULT hr = CoCreateInstance(
+			//	CLSID_WICImagingFactory,
+			//	NULL,
+			//	CLSCTX_INPROC_SERVER,
+			//	IID_PPV_ARGS(&pFactory)
+			//	);
+
 			return TRUE;
 		}
 		}
