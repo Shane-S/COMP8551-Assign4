@@ -1,5 +1,7 @@
 #include <Windows.h>
 
+const TCHAR* szImgWindowClassName = TEXT("Image");
+
 LRESULT CALLBACK ImageWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	HDC             hdc;

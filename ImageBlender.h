@@ -11,18 +11,22 @@
 #define BLEND_SERIAL 0
 #define BLEND_MMX    1
 #define BLEND_SSE    2
-
 typedef struct _BLENDSETTINGS {
-	TCHAR* szImageFile;  // The main image file
-	TCHAR* szKernelFile; // The kernel image file
-	double blendFactor;  // The blend factor (between 0 and 1)
-	BYTE   blendType;    // How to perform the blending
+	TCHAR* lpszImageFile;  // The main image file
+	TCHAR* lpszKernelFile; // The kernel image file
+	double blendFactor;    // The blend factor (between 0 and 1)
+	BYTE   blendType;      // How to perform the blending
 } BLENDSETTINGS, *LPBLENDSETTINGS;
 
+// Indices into the arrays within the struct
+#define BLENDRESULT_IMAGE   0
+#define BLENDRESULT_KERNEL  1
+#define BLENDRESULT_BLENDED 2
 typedef struct _BLENDRESULT {
-	HWND   hwndNotifyWindow; // Window to notify on competion
+	HWND   hwndNotifyWindow; // Window to notify on completion
 	double processTime;      // The time in milliseconds taken to process the images
-	// The three bitmaps, whatever those will be
+	BITMAPINFO metaData[3];  // Metadata for each of the images
+	LPVOID pixels[3];        // The pixels of each image
 } BLENDRESULT, *LPBLENDRESULT;
 
 ///<summary>Asynchronously blends the images specified in the settings, returning the results in the specified results struct.</summary>

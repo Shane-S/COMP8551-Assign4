@@ -1,32 +1,13 @@
 #include <windows.h>
+#include <cstdio>
 #include "ControlDlgProc.h"
 #include "resource.h"
 #include "Utils.h"
+#include "ImageWindow.h"
+#include "WICImagingFactory.h"
 
 LRESULT CALLBACK NameWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK SetWndProc(HWND, UINT, WPARAM, LPARAM);
-
-/**
- * Initialises the class members.
- *
- * @param wndClass    Pointer to the WNDCLASS to be initialised.
- * @param hInstnace   Handle to the current window.
- * @param lpfnWndProc Handle to the class's WndProc function.
- * @param szAppName   The name for this class.
- */
-void initClass(WNDCLASS* wndClass, WNDPROC lpfnWndProc, HINSTANCE hInstance, TCHAR szAppName[])
-{
-	wndClass->style = CS_HREDRAW | CS_VREDRAW;
-	wndClass->lpfnWndProc = lpfnWndProc;
-	wndClass->cbClsExtra = sizeof(int);
-	wndClass->cbWndExtra = 0;
-	wndClass->hInstance = hInstance;
-	wndClass->hIcon = LoadIcon(NULL, IDI_APPLICATION);
-	wndClass->hCursor = LoadCursor(NULL, IDC_ARROW);
-	wndClass->hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wndClass->lpszMenuName = NULL;
-	wndClass->lpszClassName = szAppName;
-}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	PSTR szCmdLine, int iCmdShow)
@@ -35,6 +16,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	HWND hDlg;
 	hDlg = CreateDialogParam(hInstance, MAKEINTRESOURCE(IDD_DIALOG1), 0, ControlDlgProc, 0);
 	ShowWindow(hDlg, iCmdShow);
+
+	// Register the window class for windows which will contain images
+	WNDCLASS imageWndClass;
+	imageWndClass.style       = CS_HREDRAW | CS_VREDRAW;
+	imageWndClass.lpfnWndProc = ImageWndProc;
+	imageWndClass.cbClsExtra  = sizeof(HWND);
+	imageWndClass.cbWndExtra = 0;
+	imageWndClass.hInstance = hInstance;
+	imageWndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	imageWndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+	imageWndClass.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+	imageWndClass.lpszMenuName = NULL;
+	imageWndClass.lpszClassName = szImgWindowClassName;
+
+	if (!RegisterClass(&imageWndClass)) {
+		MessageBox(NULL, TEXT("This program requires Windows NT!"), szImgWindowClassName, MB_ICONERROR);
+		return 0;
+	}
 
 	BOOL ret;
 	MSG msg;
@@ -48,32 +47,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		}
 	}
 	return msg.wParam;
-	//static TCHAR szNameClassAppName[] = TEXT("Name");
-	//static TCHAR szSetClassAppName[] = TEXT("Set");
-	//HWND         hwnd;
-	//HWND         hwnd2;
-	//HWND         hwnd3;
-	//HWND         hwnd4;
-	//MSG          msg;
-	//WNDCLASS     nameWndClass;
-	//WNDCLASS     setWndClass;
-
-	//initClass(&nameWndClass, NameWndProc, hInstance, szNameClassAppName);
-	//initClass(&setWndClass, SetWndProc, hInstance, szSetClassAppName);
-
-	//if (!RegisterClass(&nameWndClass))
-	//{
-	//	MessageBox(NULL, TEXT("This program requires Windows NT!"),
-	//		szNameClassAppName, MB_ICONERROR);
-	//	return 0;
-	//}
-
-	//if (!RegisterClass(&setWndClass))
-	//{
-	//	MessageBox(NULL, TEXT("This program requires Windows NT!"),
-	//		szSetClassAppName, MB_ICONERROR);
-	//	return 0;
-	//}
 
 	//hwnd = CreateWindow(szNameClassAppName, // window class name
 	//	TEXT("Shane Spoor"),       // window caption

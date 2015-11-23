@@ -80,7 +80,7 @@ BOOL IsValidImageFile(LPTSTR szFile) {
 	// No file extension? Definitely not valid then
 	if (lastPeriod == NULL) return FALSE;
 
-	// No picture format I've ever heard of...
+	// Extension size of 0 or greater than 7? Never heard of that format...
 	dwExtSize = (DWORD)(curChar - lastPeriod - 1);
 	if (!dwExtSize || dwExtSize > 7) {
 		return FALSE;
@@ -95,7 +95,7 @@ BOOL IsValidImageFile(LPTSTR szFile) {
 	// Yep, I'm re-using variables
 	// Skip the description part of our filter to get to the actual extensions
 	for (curChar = szFilter; *curChar != 0; curChar++);
-	curChar += 3; // Skip to first character of the first extention
+	curChar += 3; // Skip to first character of the first extension
 	lastPeriod = curChar - 1;
 
 	// Compare each valid file extension against the one for our image
@@ -136,7 +136,8 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 {
 	// These will be garbage in WM_INITDIALOG, but we're not using them there anyway, so who cares
 	LPBLENDSETTINGS settings = (LPBLENDSETTINGS)GetWindowLongPtr(hDlg, GWLP_USERDATA);
-	LPBLENDRESULT results = (LPBLENDRESULT)(settings + 1);
+	LPBLENDRESULT results    = (LPBLENDRESULT)(settings + 1);
+	HWND *imgWindows = (HWND*)(results + 1);
 
 	switch (uMsg)
 	{
@@ -145,18 +146,24 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		HWND hwndSerialRadioBtn = GetDlgItem(hDlg, IDC_RADIO_SERIAL);
 		SendMessage(hwndSerialRadioBtn, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
 		
-		// Create BLENDSETTINGS and BLENDRESULT structs for our processing
-		LPVOID blendStructs = (LPVOID)malloc(sizeof(BLENDSETTINGS) + sizeof(BLENDRESULT));
+		// Allocate space for BLENDSETTINGS, BLENDRESULT and the HWNDs to display the images (one for the image, one for the kernel, and one for the blend result)
+		LPVOID userData = (LPVOID)malloc(sizeof(BLENDSETTINGS) + sizeof(BLENDRESULT) + sizeof(HWND) * 3);
 
 		// Allocate space for the file names
-		LPBLENDSETTINGS blendSettings = (LPBLENDSETTINGS)blendStructs;
-		blendSettings->szImageFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
-		blendSettings->szKernelFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+		LPBLENDSETTINGS blendSettings = (LPBLENDSETTINGS)userData;
+		blendSettings->lpszImageFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
+		blendSettings->lpszKernelFile = (TCHAR*)malloc(sizeof(TCHAR) * FILENAME_SIZE);
 
 		LPBLENDRESULT blendResult = (LPBLENDRESULT)(blendSettings + 1);
 		blendResult->hwndNotifyWindow = hDlg;
 
-		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)blendStructs);
+		// Initialise the display windows
+		HWND *displayWindows = (HWND*)(blendResult + 1);
+		displayWindows[0] = (HWND)INVALID_HANDLE_VALUE;
+		displayWindows[1] = (HWND)INVALID_HANDLE_VALUE;
+		displayWindows[2] = (HWND)INVALID_HANDLE_VALUE;
+
+		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)userData);
 
 		return TRUE;
 	}
@@ -187,6 +194,18 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		DestroyWindow(hDlg);
 		
 	case WM_DESTROY:
+		// TODO: Destroy the child windows and tell them to free any memory they have
+
+		// Free the settings object
+		free(settings->lpszImageFile);
+		free(settings->lpszKernelFile);
+		free(settings);
+		
+		// Free the results object
+		//free(results->imageBitmap)
+		//free(results->kernelBitmap)
+		//free(results->blendedBitmap)
+		free(results);
 		PostQuitMessage(0);
 		return TRUE;
 
@@ -220,12 +239,12 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			else             settings->blendType = BLEND_SSE;
 
 			// Get the file names and check to make sure they're valid
-			GetWindowText(GetDlgItem(hDlg, IDC_IMAGE_EDIT), settings->szImageFile, FILENAME_SIZE);
-			GetWindowText(GetDlgItem(hDlg, IDC_KERNEL_EDIT), settings->szKernelFile, FILENAME_SIZE);
+			GetWindowText(GetDlgItem(hDlg, IDC_IMAGE_EDIT), settings->lpszImageFile, FILENAME_SIZE);
+			GetWindowText(GetDlgItem(hDlg, IDC_KERNEL_EDIT), settings->lpszKernelFile, FILENAME_SIZE);
 
-			if (!IsValidImageFile(settings->szImageFile)) {
+			if (!IsValidImageFile(settings->lpszImageFile)) {
 				MessageBox(hDlg, TEXT("Invalid image file. Please select an existing file file with one of the specified extensions."), TEXT("Invalid Image File"), MB_ICONERROR);
-			} else if (!IsValidImageFile(settings->szKernelFile)) {
+			} else if (!IsValidImageFile(settings->lpszKernelFile)) {
 				MessageBox(hDlg, TEXT("Invalid kernel image file. Please select an existing file with one of the specified extensions."), TEXT("Invalid Kernel Image File"), MB_ICONERROR);
 			}
 
