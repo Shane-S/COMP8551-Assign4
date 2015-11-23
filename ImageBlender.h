@@ -30,7 +30,7 @@ typedef struct _BLENDRESULT {
 } BLENDRESULT, *LPBLENDRESULT;
 
 ///<summary>Asynchronously blends the images specified in the settings, returning the results in the specified results struct.</summary>
-///<notes>Do no write to the settings struct and do not read from or write to the results struct until the blend has finished.</notes>
+///<remarks>Do no write to the settings struct and do not read from or write to the results struct until the blend has finished.</remarks>
 ///<param name="settings">Struct containing the images to blend, the blend factor, and the blend method to use.</param>
 ///<param name="results">Struct specifiying the window to notify on finishing the blend. It will hold the resulting bitmaps.</param>
 VOID BlendImages(LPBLENDSETTINGS settings, LPBLENDRESULT results);

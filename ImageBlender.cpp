@@ -24,6 +24,7 @@ VOID BlendWithSSE(LPBLENDRESULT results) {
 BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
 	// Bit of a strange way of doing this... Oh well
 	IWICImagingFactory *factory = CWICImagingFactory::GetInstance().GetFactory();
+	HRESULT error;
 
 	// TODO: Error checking
 	// These smart pointers will be freed automatically once out of scope
@@ -33,11 +34,20 @@ BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
 	CComPtr<IWICFormatConverter> convertedFrame;
 	wchar_t imageNameWide[MAX_PATH] = { 0 };
 	TCHAR_2_WCHAR(imageNameWide, file, MAX_PATH);
-	factory->CreateDecoderFromFilename(imageNameWide, NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
-	decoder->GetFrame(0, &frame);
+	error = factory->CreateDecoderFromFilename(imageNameWide, NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
+	if (error != S_OK) return FALSE;
+
+	error = decoder->GetFrame(0, &frame);
+	if (error != S_OK) return FALSE;
 	
 	// Set the image metadata
-	frame->GetSize((UINT*)info->bmiHeader.biWidth, (UINT*)info->bmiHeader.biHeight);
+	UINT width;
+	UINT height;
+	error = frame->GetSize(&width, &height);
+	if (error != S_OK) return FALSE;
+
+	info->bmiHeader.biWidth = width;
+	info->bmiHeader.biHeight = height;
 	info->bmiHeader.biBitCount = 32;
 	info->bmiHeader.biCompression = BI_RGB;
 	info->bmiHeader.biHeight *= -1; // Convert to top-down image
@@ -45,8 +55,10 @@ BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
 	info->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 
 	// Convert the format of the image frame to 32bppRGBA
-	factory->CreateFormatConverter(&convertedFrame);
-	convertedFrame->Initialize(
+	error = factory->CreateFormatConverter(&convertedFrame);
+	if (error != S_OK) return FALSE;
+
+	error = convertedFrame->Initialize(
 		frame,                        // Source frame to convert
 		GUID_WICPixelFormat32bppRGBA, // The desired pixel format
 		WICBitmapDitherTypeNone,      // The desired dither pattern
@@ -54,10 +66,12 @@ BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
 		0.f,                          // The desired alpha threshold
 		WICBitmapPaletteTypeCustom    // Palette translation type
 	);
+	if (error != S_OK) return FALSE;
 
 	UINT bufSize = 32 * info->bmiHeader.biWidth * info->bmiHeader.biHeight;
-	*pixels = (void *)malloc(bufSize);
-	convertedFrame->CopyPixels(NULL, 32 * info->bmiHeader.biWidth, bufSize, (BYTE*)(*pixels));
+	*pixels = (void *)realloc(*pixels, bufSize);
+	error = convertedFrame->CopyPixels(NULL, 32 * info->bmiHeader.biWidth, bufSize, (BYTE*)(*pixels));
+	return error == S_OK;
 }
 
 ///<summary>Performs the actual blending of the images.</summary>
@@ -68,14 +82,25 @@ DWORD WINAPI BlendFunc(LPVOID params) {
 	LPBLENDRESULT   results = *((LPBLENDRESULT*)((LPBLENDSETTINGS*)params + 1));
 	CTimer timer;
 
-	GetImageData(settings->lpszImageFile, &results->metaData[BLENDRESULT_IMAGE], &results->pixels[BLENDRESULT_IMAGE]);
-	GetImageData(settings->lpszKernelFile, &results->metaData[BLENDRESULT_KERNEL], &results->pixels[BLENDRESULT_KERNEL]);
+	DWORD error = BLEND_NO_ERROR;
 
-	// TODO: Check for invalid image sizes
+	if (!GetImageData(settings->lpszImageFile, &results->metaData[BLENDRESULT_IMAGE], &results->pixels[BLENDRESULT_IMAGE]) ||
+		!GetImageData(settings->lpszKernelFile, &results->metaData[BLENDRESULT_KERNEL], &results->pixels[BLENDRESULT_KERNEL])) {
+		error = BLEND_GENERAL_FAILURE;
+		goto finish;
+	}
+
+	// Check if kernel is larger
+	if (results->metaData[BLENDRESULT_IMAGE].bmiHeader.biHeight < results->metaData[BLENDRESULT_KERNEL].bmiHeader.biHeight ||
+		results->metaData[BLENDRESULT_IMAGE].bmiHeader.biWidth < results->metaData[BLENDRESULT_KERNEL].bmiHeader.biWidth) {
+		error = BLEND_KERNEL_2LARGE;
+		goto finish;
+	}
 
 	// The blended image will be the same, so just copy it over
 	memcpy(&results->metaData[BLENDRESULT_BLENDED], &results->metaData[BLENDRESULT_IMAGE], sizeof(BITMAPINFO));
-	results->pixels[BLENDRESULT_BLENDED] = malloc(32 * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biHeight * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biWidth);
+	long bufSize = 32 * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biHeight * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biWidth * -1;
+	results->pixels[BLENDRESULT_BLENDED] = realloc(results->pixels[BLENDRESULT_BLENDED], (size_t)bufSize);
 
 	timer.Start();
 	if (settings->blendType == BLEND_SERIAL) {
@@ -88,9 +113,10 @@ DWORD WINAPI BlendFunc(LPVOID params) {
 	}
 
 	timer.End();
-	timer.DiffMs(results->processTime);	
-	SendMessage(results->hwndNotifyWindow, WM_BLENDFINISHED, BLEND_NO_ERROR, 0);
+	timer.DiffMs(results->processTime);
 
+finish:
+	SendMessage(results->hwndNotifyWindow, WM_BLENDFINISHED, error, 0);
 	free(params);
 	return 0;
 }

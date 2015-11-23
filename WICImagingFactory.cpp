@@ -6,6 +6,7 @@ std::shared_ptr<CWICImagingFactory> CWICImagingFactory::m_pInstance;
 CWICImagingFactory::CWICImagingFactory()
 	: m_pWICImagingFactory(nullptr)
 {
+	CoInitialize(NULL);
 	HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
 		IID_IWICImagingFactory, (LPVOID*)&m_pWICImagingFactory);
 	assert(SUCCEEDED(hr));

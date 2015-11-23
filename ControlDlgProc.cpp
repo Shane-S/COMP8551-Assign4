@@ -156,6 +156,9 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 		LPBLENDRESULT blendResult = (LPBLENDRESULT)(blendSettings + 1);
 		blendResult->hwndNotifyWindow = hDlg;
+		blendResult->pixels[BLENDRESULT_IMAGE] = NULL;
+		blendResult->pixels[BLENDRESULT_KERNEL] = NULL;
+		blendResult->pixels[BLENDRESULT_BLENDED] = NULL;
 
 		// Initialise the display windows
 		HWND *displayWindows = (HWND*)(blendResult + 1);
@@ -199,13 +202,15 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		// Free the settings object
 		free(settings->lpszImageFile);
 		free(settings->lpszKernelFile);
-		free(settings);
 		
 		// Free the results object
 		//free(results->imageBitmap)
 		//free(results->kernelBitmap)
 		//free(results->blendedBitmap)
-		free(results);
+		//free(results);
+
+		// settings is actually the pointer to the whole buffer, so we need to free it last
+		free(settings);
 		PostQuitMessage(0);
 		return TRUE;
 

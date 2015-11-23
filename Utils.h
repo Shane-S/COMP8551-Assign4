@@ -29,5 +29,5 @@
 ///<summary>Returns a string representing the given dialog error code.</summary>
 ///
 ///<param name="dwErrorCode">The dialog error code.</param>
-///<return>A string describing the given error code, or "Unknown".</return>
+///<returns>A string describing the given error code, or "Unknown".</returns>
 const TCHAR* CommDlgExtendedErrorToString(DWORD dwErrorCode);
