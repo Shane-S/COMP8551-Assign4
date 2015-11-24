@@ -3,6 +3,7 @@
 #include "ControlDlgProc.h"
 #include "Utils.h"
 #include "ImageBlender.h"
+#include "ImageWindow.h"
 
 #define FILENAME_SIZE MAX_PATH
 
@@ -156,9 +157,9 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 		LPBLENDRESULT blendResult = (LPBLENDRESULT)(blendSettings + 1);
 		blendResult->hwndNotifyWindow = hDlg;
-		blendResult->pixels[BLENDRESULT_IMAGE] = NULL;
-		blendResult->pixels[BLENDRESULT_KERNEL] = NULL;
-		blendResult->pixels[BLENDRESULT_BLENDED] = NULL;
+		blendResult->bufs[BLENDRESULT_IMAGE].pixels   = NULL;
+		blendResult->bufs[BLENDRESULT_KERNEL].pixels  = NULL;
+		blendResult->bufs[BLENDRESULT_BLENDED].pixels = NULL;
 
 		// Initialise the display windows
 		HWND *displayWindows = (HWND*)(blendResult + 1);
@@ -177,7 +178,7 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			MessageBox(NULL, TEXT("The images could not be blended for some reason. Please try again later."), TEXT("General Failure"), MB_ICONERROR);
 			return TRUE;
 		case BLEND_KERNEL_2LARGE:
-			MessageBox(NULL, TEXT("The kernel image was too large. Its maximum dimensions are those of the image to blend. Please select another kernel."),
+			MessageBox(NULL, TEXT("The kernel image was too large. Its maximum dimensions must be those of the image to blend. Please select another kernel."),
 				TEXT("Kernel Too Large"), MB_ICONERROR);
 			return TRUE;
 		}
@@ -190,11 +191,43 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 		// Re-enable the start button
 		EnableWindow(GetDlgItem(hDlg, IDSTART), TRUE);
+
+		// Create the windows if we haven't already
+		if (imgWindows[0] == (HWND)INVALID_HANDLE_VALUE) {
+			HINSTANCE hInst = (HINSTANCE)GetWindowLongPtr(hDlg, GWLP_HINSTANCE);
+			InitImageWindow(&imgWindows[BLENDRESULT_IMAGE], hDlg, hInst, TEXT("Original Image"));
+			InitImageWindow(&imgWindows[BLENDRESULT_KERNEL], hDlg, hInst, TEXT("Kernel Image"));
+			InitImageWindow(&imgWindows[BLENDRESULT_BLENDED], hDlg, hInst, TEXT("Blended Image"));
+
+			for (int i = 0; i < 3; i++) {
+				ShowWindow(imgWindows[i], SW_SHOW);
+			}
+		}
+		
+		for (int i = 0; i < 2; i++) {
+			LPOFFSCREENBUFFER oldBuf = (LPOFFSCREENBUFFER)GetWindowLongPtr(imgWindows[i], IMG_GWLP_OFFSCREENBUFFER);
+			LPOFFSCREENBUFFER newBuf = &results->bufs[i];
+
+			// Set the new pixels
+			DWORD newSize = (DWORD)(DIB_WIDTHBYTES(newBuf->width * newBuf->bytesPerPixel * 8) * newBuf->height);
+			oldBuf->pixels = realloc(oldBuf->pixels, newSize);
+			memcpy(oldBuf->pixels, newBuf->pixels, newSize);
+			
+			// Copy over the new bitmap info
+			memcpy(&oldBuf->info, &newBuf->info, sizeof(BITMAPINFO));
+
+			oldBuf->height = newBuf->height;
+			oldBuf->width = newBuf->width;
+
+			SetWindowPos(imgWindows[i], 0, 0, 0, newBuf->width, newBuf->height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+			UpdateWindow(imgWindows[i]);
+		}
 		return TRUE;
 	}
 
 	case WM_CLOSE: /* there are more things to go here, */
 		DestroyWindow(hDlg);
+		return TRUE;
 		
 	case WM_DESTROY:
 		// TODO: Destroy the child windows and tell them to free any memory they have
@@ -203,12 +236,6 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 		free(settings->lpszImageFile);
 		free(settings->lpszKernelFile);
 		
-		// Free the results object
-		//free(results->imageBitmap)
-		//free(results->kernelBitmap)
-		//free(results->blendedBitmap)
-		//free(results);
-
 		// settings is actually the pointer to the whole buffer, so we need to free it last
 		free(settings);
 		PostQuitMessage(0);
@@ -257,21 +284,6 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			EnableWindow(GetDlgItem(hDlg, IDSTART), FALSE);
 
 			BlendImages(settings, results);
-
-			// Initialize COM
-			//CoInitialize(NULL);
-
-			//// The factory pointer
-			//IWICImagingFactory *pFactory = NULL;
-
-			//// Create the COM imaging factory
-			//HRESULT hr = CoCreateInstance(
-			//	CLSID_WICImagingFactory,
-			//	NULL,
-			//	CLSCTX_INPROC_SERVER,
-			//	IID_PPV_ARGS(&pFactory)
-			//	);
-
 			return TRUE;
 		}
 		}

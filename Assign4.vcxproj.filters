@@ -53,9 +53,6 @@
     <ClInclude Include="ImageWindow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Messages.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CTimer.h">
       <Filter>Header Files</Filter>
     </ClInclude>

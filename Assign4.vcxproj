@@ -220,7 +220,6 @@
     <ClInclude Include="WICImagingFactory.h" />
     <ClInclude Include="ImageBlender.h" />
     <ClInclude Include="ImageWindow.h" />
-    <ClInclude Include="Messages.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>

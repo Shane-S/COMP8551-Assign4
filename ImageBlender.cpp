@@ -18,10 +18,9 @@ VOID BlendWithSSE(LPBLENDRESULT results) {
 
 ///<summary>Retrieves the pixels from the image contained in file, storing them as RGBA8888 pixels and putting the metadata in info.</summary>
 ///<param name="file">The image file to load.</param>
-///<param name="info">A struct to store the metadata.</param>
-///<param name="pixels">A pointer which will contain the pixels after this call.</param>
+///<param name="offscreenBuffer">A struct to store the metadata.</param>
 ///<returns>TRUE on success, FALSE on failure.</returns>
-BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
+BOOL GetImageData(LPTSTR file, LPOFFSCREENBUFFER offscreenBuffer) {
 	// Bit of a strange way of doing this... Oh well
 	IWICImagingFactory *factory = CWICImagingFactory::GetInstance().GetFactory();
 	HRESULT error;
@@ -46,31 +45,36 @@ BOOL GetImageData(LPTSTR file, LPBITMAPINFO info, LPVOID *pixels) {
 	error = frame->GetSize(&width, &height);
 	if (error != S_OK) return FALSE;
 
-	info->bmiHeader.biWidth = width;
-	info->bmiHeader.biHeight = height;
-	info->bmiHeader.biBitCount = 32;
-	info->bmiHeader.biCompression = BI_RGB;
-	info->bmiHeader.biHeight *= -1; // Convert to top-down image
-	info->bmiHeader.biPlanes = 1;
-	info->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	offscreenBuffer->width = width;
+	offscreenBuffer->height = height;
+	offscreenBuffer->bytesPerPixel = 4;
+
+	offscreenBuffer->info.bmiHeader.biSize = sizeof(offscreenBuffer->info.bmiHeader);
+	offscreenBuffer->info.bmiHeader.biWidth = offscreenBuffer->width;
+	offscreenBuffer->info.bmiHeader.biHeight = -offscreenBuffer->height;
+	offscreenBuffer->info.bmiHeader.biPlanes = 1;
+	offscreenBuffer->info.bmiHeader.biBitCount = 32;
+	offscreenBuffer->info.bmiHeader.biCompression = BI_RGB;
 
 	// Convert the format of the image frame to 32bppRGBA
 	error = factory->CreateFormatConverter(&convertedFrame);
 	if (error != S_OK) return FALSE;
 
 	error = convertedFrame->Initialize(
-		frame,                        // Source frame to convert
-		GUID_WICPixelFormat32bppRGBA, // The desired pixel format
-		WICBitmapDitherTypeNone,      // The desired dither pattern
-		NULL,                         // The desired palette 
-		0.f,                          // The desired alpha threshold
-		WICBitmapPaletteTypeCustom    // Palette translation type
+		frame,                       // Source frame to convert
+		GUID_WICPixelFormat32bppBGR, // The desired pixel format
+		WICBitmapDitherTypeNone,     // The desired dither pattern
+		NULL,                        // The desired palette 
+		0.f,                         // The desired alpha threshold
+		WICBitmapPaletteTypeCustom   // Palette translation type
 	);
 	if (error != S_OK) return FALSE;
 
-	UINT bufSize = 32 * info->bmiHeader.biWidth * info->bmiHeader.biHeight;
-	*pixels = (void *)realloc(*pixels, bufSize);
-	error = convertedFrame->CopyPixels(NULL, 32 * info->bmiHeader.biWidth, bufSize, (BYTE*)(*pixels));
+	// See https://social.msdn.microsoft.com/Forums/vstudio/en-US/9bf9dea5-e21e-4361-a0a6-be331efde835/how-do-you-calculate-the-image-stride-for-a-bitmap
+	DWORD dwStride = DIB_WIDTHBYTES(width * 32);
+	INT bufSize = dwStride * height;
+	offscreenBuffer->pixels = (void *)realloc(offscreenBuffer->pixels, bufSize);
+	error = convertedFrame->CopyPixels(NULL, dwStride, (UINT)bufSize, (BYTE*)(offscreenBuffer->pixels));
 	return error == S_OK;
 }
 
@@ -84,23 +88,23 @@ DWORD WINAPI BlendFunc(LPVOID params) {
 
 	DWORD error = BLEND_NO_ERROR;
 
-	if (!GetImageData(settings->lpszImageFile, &results->metaData[BLENDRESULT_IMAGE], &results->pixels[BLENDRESULT_IMAGE]) ||
-		!GetImageData(settings->lpszKernelFile, &results->metaData[BLENDRESULT_KERNEL], &results->pixels[BLENDRESULT_KERNEL])) {
+	if (!GetImageData(settings->lpszImageFile, &results->bufs[BLENDRESULT_IMAGE]) ||
+		!GetImageData(settings->lpszKernelFile, &results->bufs[BLENDRESULT_KERNEL])) {
 		error = BLEND_GENERAL_FAILURE;
 		goto finish;
 	}
 
 	// Check if kernel is larger
-	if (results->metaData[BLENDRESULT_IMAGE].bmiHeader.biHeight < results->metaData[BLENDRESULT_KERNEL].bmiHeader.biHeight ||
-		results->metaData[BLENDRESULT_IMAGE].bmiHeader.biWidth < results->metaData[BLENDRESULT_KERNEL].bmiHeader.biWidth) {
+	if (results->bufs[BLENDRESULT_IMAGE].height < results->bufs[BLENDRESULT_KERNEL].height ||
+		results->bufs[BLENDRESULT_IMAGE].width < results->bufs[BLENDRESULT_KERNEL].width) {
 		error = BLEND_KERNEL_2LARGE;
 		goto finish;
 	}
 
 	// The blended image will be the same, so just copy it over
-	memcpy(&results->metaData[BLENDRESULT_BLENDED], &results->metaData[BLENDRESULT_IMAGE], sizeof(BITMAPINFO));
-	long bufSize = 32 * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biHeight * results->metaData[BLENDRESULT_IMAGE].bmiHeader.biWidth * -1;
-	results->pixels[BLENDRESULT_BLENDED] = realloc(results->pixels[BLENDRESULT_BLENDED], (size_t)bufSize);
+	memcpy(&results->bufs[BLENDRESULT_BLENDED].info, &results->bufs[BLENDRESULT_IMAGE].info, sizeof(BITMAPINFO));
+	long bufSize = 32 * results->bufs[BLENDRESULT_IMAGE].height * results->bufs[BLENDRESULT_IMAGE].width;
+	results->bufs[BLENDRESULT_BLENDED].pixels = realloc(results->bufs[BLENDRESULT_BLENDED].pixels, (size_t)bufSize);
 
 	timer.Start();
 	if (settings->blendType == BLEND_SERIAL) {

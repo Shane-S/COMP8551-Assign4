@@ -22,12 +22,24 @@ typedef struct _BLENDSETTINGS {
 #define BLENDRESULT_IMAGE   0
 #define BLENDRESULT_KERNEL  1
 #define BLENDRESULT_BLENDED 2
+
+typedef struct _OFFSCREENBUFFER
+{
+	BITMAPINFO info;
+	void *pixels;
+	int height;
+	int width;
+	int bytesPerPixel;
+} OFFSCREENBUFFER, *LPOFFSCREENBUFFER;
+
 typedef struct _BLENDRESULT {
-	HWND   hwndNotifyWindow; // Window to notify on completion
-	double processTime;      // The time in milliseconds taken to process the images
-	BITMAPINFO metaData[3];  // Metadata for each of the images
-	LPVOID pixels[3];        // The pixels of each image
+	HWND   hwndNotifyWindow;   // Window to notify on completion
+	double processTime;        // The time in milliseconds taken to process the images
+	OFFSCREENBUFFER bufs[3]; // Offscreen buffer structs to hold info for the windows
 } BLENDRESULT, *LPBLENDRESULT;
+
+
+#define DIB_WIDTHBYTES(bits) ((((bits) + 31)>>5)<<2)
 
 ///<summary>Asynchronously blends the images specified in the settings, returning the results in the specified results struct.</summary>
 ///<remarks>Do no write to the settings struct and do not read from or write to the results struct until the blend has finished.</remarks>
