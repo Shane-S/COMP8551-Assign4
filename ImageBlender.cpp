@@ -5,7 +5,14 @@
 #include "Utils.h"
 
 VOID BlendSerially(LPBLENDRESULT results) {
-	// Blend the stuff serially
+	LPOFFSCREENBUFFER blendBuf = &results->bufs[BLENDRESULT_BLENDED];
+	LPDWORD blendedPixels = (LPDWORD)blendBuf->pixels;
+	LPDWORD blendedImage = (LPDWORD)results->bufs[BLENDRESULT_IMAGE].pixels;
+	for (int row = 0; row < blendBuf->height; row++) {
+		for (int col = 0; col < blendBuf->width; col++) {
+			blendedPixels[row * blendBuf->width + col] = blendedImage[row * blendBuf->width + col] + RGB(0, 0, 50);
+		}
+	}
 }
 
 VOID BlendWithMMX(LPBLENDRESULT results) {
@@ -103,6 +110,9 @@ DWORD WINAPI BlendFunc(LPVOID params) {
 
 	// The blended image will be the same, so just copy it over
 	memcpy(&results->bufs[BLENDRESULT_BLENDED].info, &results->bufs[BLENDRESULT_IMAGE].info, sizeof(BITMAPINFO));
+	results->bufs[BLENDRESULT_BLENDED].width = results->bufs[BLENDRESULT_IMAGE].width;
+	results->bufs[BLENDRESULT_BLENDED].height = results->bufs[BLENDRESULT_IMAGE].height;
+	results->bufs[BLENDRESULT_BLENDED].bytesPerPixel = results->bufs[BLENDRESULT_IMAGE].bytesPerPixel;
 	long bufSize = 32 * results->bufs[BLENDRESULT_IMAGE].height * results->bufs[BLENDRESULT_IMAGE].width;
 	results->bufs[BLENDRESULT_BLENDED].pixels = realloc(results->bufs[BLENDRESULT_BLENDED].pixels, (size_t)bufSize);
 

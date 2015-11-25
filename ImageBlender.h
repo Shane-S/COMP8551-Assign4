@@ -18,11 +18,6 @@ typedef struct _BLENDSETTINGS {
 	BYTE   blendType;      // How to perform the blending
 } BLENDSETTINGS, *LPBLENDSETTINGS;
 
-// Indices into the arrays within the struct
-#define BLENDRESULT_IMAGE   0
-#define BLENDRESULT_KERNEL  1
-#define BLENDRESULT_BLENDED 2
-
 typedef struct _OFFSCREENBUFFER
 {
 	BITMAPINFO info;
@@ -31,6 +26,12 @@ typedef struct _OFFSCREENBUFFER
 	int width;
 	int bytesPerPixel;
 } OFFSCREENBUFFER, *LPOFFSCREENBUFFER;
+
+
+// Indices into the arrays within the struct
+#define BLENDRESULT_IMAGE   0
+#define BLENDRESULT_KERNEL  1
+#define BLENDRESULT_BLENDED 2
 
 typedef struct _BLENDRESULT {
 	HWND   hwndNotifyWindow;   // Window to notify on completion

@@ -204,7 +204,7 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 			}
 		}
 		
-		for (int i = 0; i < 2; i++) {
+		for (int i = 0; i < 3; i++) {
 			LPOFFSCREENBUFFER oldBuf = (LPOFFSCREENBUFFER)GetWindowLongPtr(imgWindows[i], IMG_GWLP_OFFSCREENBUFFER);
 			LPOFFSCREENBUFFER newBuf = &results->bufs[i];
 
@@ -276,8 +276,10 @@ INT_PTR CALLBACK ControlDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 			if (!IsValidImageFile(settings->lpszImageFile)) {
 				MessageBox(hDlg, TEXT("Invalid image file. Please select an existing file file with one of the specified extensions."), TEXT("Invalid Image File"), MB_ICONERROR);
+				return TRUE;
 			} else if (!IsValidImageFile(settings->lpszKernelFile)) {
 				MessageBox(hDlg, TEXT("Invalid kernel image file. Please select an existing file with one of the specified extensions."), TEXT("Invalid Kernel Image File"), MB_ICONERROR);
+				return TRUE;
 			}
 
 			HWND startBtnHwnd = (HWND)lParam;

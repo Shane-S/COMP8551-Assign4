@@ -74,28 +74,6 @@ LRESULT CALLBACK ImageWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		Win32DisplayBufferInWindow(hdc, buf, winWidth, winHeight, x, y, width, height);
 		EndPaint(hwnd, &ps);
-
-		//DWORD dwWidth = rect.right - rect.left;
-		//DWORD dwHeight = rect.bottom - rect.top;
-		//HBITMAP memBmp = CreateCompatibleBitmap(hdc, dwWidth, dwHeight);
-		//HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
-
-		//DWORD dwError = GetLastError();
-
-		//// The bitmap to which we'll be writing
-		//HBITMAP hDIBBitmap;
-		//void* pvImageBits = nullptr;	// Freed with DeleteObject(hDIBBitmap)
-		//hDIBBitmap = CreateDIBSection(memDC, bminfo, DIB_RGB_COLORS, &pvImageBits, NULL, 0);
-		//
-		//UINT stride = DIB_WIDTHBYTES(bminfo->bmiHeader.biWidth * bminfo->bmiHeader.biBitCount);
-		//UINT bufSize = (UINT)(bminfo->bmiHeader.biHeight * -1) * stride;
-		//memcpy(pvImageBits, buf->pixels, bufSize);
-		//dwError = SetDIBitsToDevice(memDC, 0, 0, bminfo->bmiHeader.biWidth, bminfo->bmiHeader.biHeight, 0, 0, 0, bminfo->bmiHeader.biHeight, pvImageBits, bminfo, DIB_RGB_COLORS);
-		//dwError = DeleteObject(hDIBBitmap);
-		//dwError = BitBlt(hdc, 0, 0, dwWidth, dwHeight, memDC, 0, 0, SRCCOPY);
-
-		//EndPaint(hwnd, &ps);
-		//SelectObject(memDC, oldBmp);
 		return 0;
 	}
 	
