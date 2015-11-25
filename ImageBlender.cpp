@@ -4,22 +4,32 @@
 #include "CTimer.h"
 #include "Utils.h"
 
-VOID BlendSerially(LPBLENDRESULT results) {
+VOID BlendSerially(double blendFactor, LPBLENDRESULT results) {
 	LPOFFSCREENBUFFER blendBuf = &results->bufs[BLENDRESULT_BLENDED];
-	LPDWORD blendedPixels = (LPDWORD)blendBuf->pixels;
-	LPDWORD blendedImage = (LPDWORD)results->bufs[BLENDRESULT_IMAGE].pixels;
+	LPBYTE blendedPixels = (LPBYTE)blendBuf->pixels;
+	LPBYTE imagePixels = (LPBYTE)results->bufs[BLENDRESULT_IMAGE].pixels;
+	LPBYTE kernelPixels = (LPBYTE)results->bufs[BLENDRESULT_KERNEL].pixels;
+
+	DWORD kWidth  = results->bufs[BLENDRESULT_KERNEL].width;
+	DWORD kHeight = results->bufs[BLENDRESULT_KERNEL].height;
+
 	for (int row = 0; row < blendBuf->height; row++) {
 		for (int col = 0; col < blendBuf->width; col++) {
-			blendedPixels[row * blendBuf->width + col] = blendedImage[row * blendBuf->width + col] + RGB(0, 0, 50);
+			int imgOff = (row * blendBuf->width + col) << 2;
+			int kernelOff = (((row % kHeight) * kWidth) + (col % kWidth)) << 2; // (Hopefully) allow for arbitray kernel sizes within the image bounds
+
+			blendedPixels[imgOff] = (imagePixels[imgOff] * blendFactor) + (kernelPixels[kernelOff] * (1 - blendFactor));
+			blendedPixels[imgOff + 1] = (imagePixels[imgOff + 1] * blendFactor) + (kernelPixels[kernelOff + 1] * (1 - blendFactor));
+			blendedPixels[imgOff + 2] = (imagePixels[imgOff + 2] * blendFactor) + (kernelPixels[kernelOff + 2] * (1 - blendFactor));
 		}
 	}
 }
 
-VOID BlendWithMMX(LPBLENDRESULT results) {
+VOID BlendWithMMX(double blendFactor, LPBLENDRESULT results) {
 
 }
 
-VOID BlendWithSSE(LPBLENDRESULT results) {
+VOID BlendWithSSE(double blendFactor, LPBLENDRESULT results) {
 
 }
 
@@ -118,12 +128,12 @@ DWORD WINAPI BlendFunc(LPVOID params) {
 
 	timer.Start();
 	if (settings->blendType == BLEND_SERIAL) {
-		BlendSerially(results);
+		BlendSerially(settings->blendFactor, results);
 	} else if (settings->blendType == BLEND_MMX) {
-		BlendWithMMX(results);
+		BlendWithMMX(settings->blendFactor, results);
 	} else {
 		// Such a rebel that I'm not going to check for invalid blend types
-		BlendWithSSE(results);
+		BlendWithSSE(settings->blendFactor, results);
 	}
 
 	timer.End();
